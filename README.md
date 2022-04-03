@@ -13,6 +13,8 @@ Given a base topic of "heater" and a heater name of "bedroom", you would end up 
 
 ## Setup
 
+Clone this repository into the location of your choosing.
+
 Install the requirements using
 
     python3 -m pip install -U -r requirements.txt
@@ -22,6 +24,10 @@ Install the requirements using
 Use gourd to run this:
 
     gourd hestia:app
+
+### Systemd
+
+There's a sample `hestia.service` file you can use as a starting point. Symlink or copy it into `/etc/systemd/system` and modify for your environment.
 
 ## Configuration
 
