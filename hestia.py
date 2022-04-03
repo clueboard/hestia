@@ -7,7 +7,7 @@ from threading import Lock
 
 from gourd import Gourd
 
-MQTT_CLIENT_ID = environ.get('MQTT_CLIENT_ID', 'mqtt_thermostat')
+MQTT_CLIENT_ID = environ.get('MQTT_CLIENT_ID', 'hestia')
 MQTT_USER = environ.get('MQTT_USER', '')
 MQTT_PASS = environ.get('MQTT_PASSWD', '')
 MQTT_HOST = environ.get('MQTT_HOST', 'localhost')
