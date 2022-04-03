@@ -1,0 +1,13 @@
+[Unit]
+Description=Control a heater using MQTT
+After=network.target
+
+[Service]
+Restart=on-failure
+RestartSec=5s
+User=root
+Environment=MQTT_HOST=localhost
+ExecStart=/home/zwhite/hestia/hestia
+
+[Install]
+WantedBy=multi-user.target
