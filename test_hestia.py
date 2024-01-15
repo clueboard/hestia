@@ -54,21 +54,16 @@ def check_temps(temp_list, on_temps, off_temps):
         app.publish(environ['TOPIC_TEMP_PROBE'], temp)
         sleep(0.6)
 
-        if temp in on_temps:
-            if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ['PAYLOAD_HEATER_ON']:
-                cli.log.info('Sucessfully turned on heater!')
-                del mqtt_messages[environ['TOPIC_HEATER_SWITCH']]
-            else:
-                cli.log.error('Did not turn on heater! TOPIC_HEATER_SWITCH=%s', mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']))
-                success = False
+        for switch_action, switch_temps in [['ON', on_temps], ['OFF', off_temps]]:
+            if temp in switch_temps:
+                if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ[f'PAYLOAD_HEATER_{switch_action}']:
+                    cli.log.info('Sucessfully turned %s heater!', switch_action)
+                else:
+                    cli.log.error('Did not turn %s heater! TOPIC_HEATER_SWITCH=%s', switch_action, mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']))
+                    success = False
 
-        elif temp in off_temps:
-            if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ['PAYLOAD_HEATER_OFF']:
-                cli.log.info('Sucessfully turned off heater!')
-                del mqtt_messages[environ['TOPIC_HEATER_SWITCH']]
-            else:
-                cli.log.error('Did not turn off heater! TOPIC_HEATER_SWITCH=%s', mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']))
-                success = False
+        if environ['TOPIC_HEATER_SWITCH'] in mqtt_messages:
+            del mqtt_messages[environ['TOPIC_HEATER_SWITCH']]
 
     return success
 
