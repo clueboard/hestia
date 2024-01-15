@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import atexit
 from os import environ
 from subprocess import Popen
 from time import sleep
@@ -35,6 +36,7 @@ environ['TOPIC_HEATER_SWITCH'] = 'switch/heater'
 # Objects
 app = Gourd(app_name='test_hestia_script', mqtt_host=environ['MQTT_HOST'], mqtt_port=int(environ['MQTT_PORT']), username=environ['MQTT_USER'], password=environ['MQTT_PASSWD'], timeout=int(environ['MQTT_TIMEOUT']))
 mqtt_messages = {}  # {topic: payload}
+processes = {}
 
 
 @app.subscribe('#')
@@ -42,6 +44,40 @@ def mqtt_listen(msg):
     if not msg.topic.endswith('/debug'):
         cli.log.info('MQTT Message: %s: %s', msg.topic, msg.payload)
         mqtt_messages[msg.topic] = msg.payload
+
+
+@atexit.register
+def atexit_cleanup():
+    """Cleanup background processes before exiting.
+    """
+    # Tell all processes to exit, in a nice way
+    cli.log.info('Cleaning up background processes...')
+    for process in processes.values():
+        process.terminate()
+
+    # Give them at least 5 seconds to stop
+    for i in range(5):
+        for process in processes.values():
+            if process.poll() is None:
+                sleep(1)
+
+    # Tell any remaining processes to exit, non-politely
+    for process_name, process in processes.items():
+        if process.poll() is None:
+            cli.log.error('%s did not terminate, killing...', processs_name.title())
+            process.kill()
+
+
+def check_procs():
+    """Returns True if all background processes are running.
+    """
+    for process_name, process in processes.items():
+        process_status = process.poll()
+        if process_status is not None:
+            cli.log.error('%s is no longer running! errno %s', process_name.title(), process_status)
+            return False
+
+    return True
 
 
 def check_temps(temp_list, on_temps, off_temps):
@@ -53,6 +89,10 @@ def check_temps(temp_list, on_temps, off_temps):
         cli.log.info('Sending temperature %s', temp)
         app.publish(environ['TOPIC_TEMP_PROBE'], temp)
         sleep(0.6)
+
+        if not check_procs():
+            success = False
+            break
 
         for switch_action, switch_temps in [['ON', on_temps], ['OFF', off_temps]]:
             if temp in switch_temps:
@@ -75,7 +115,7 @@ def main(cli):
     # Start the daemons we'll need
     cli.log.info('Starting mosquitto in the background and waiting %s seconds for initialization', MOSQUITTO_SLEEP_TIME)
     args = 'mosquitto', '-c', './test_mosquitto.conf'
-    mosquitto_process = Popen(args)
+    processes['mosquitto'] = Popen(args)
     sleep(MOSQUITTO_SLEEP_TIME)
 
     cli.log.info('Starting MQTT listener and waiting %s seconds for initialization', MOSQUITTO_SLEEP_TIME)
@@ -84,7 +124,7 @@ def main(cli):
 
     cli.log.info('Starting hestia in the background and waiting %s seconds for initialization', HESTIA_SLEEP_TIME)
     args = './run_hestia'
-    hestia_process = Popen(args)
+    processes['hestia'] = Popen(args)
     sleep(HESTIA_SLEEP_TIME)
 
     # Send temperature readings from the turn on point to the turn off point to test that hestia is working correctly
@@ -94,21 +134,6 @@ def main(cli):
     # Send temperature readings from the turn off point to the turn on point to test that hestia is working correctly
     if not check_temps([i/10 for i in range(202, 187, -1)], [18.8], [20.0, 20.1, 20.2]):
         success = False
-
-    # Cleanup
-    hestia_process.terminate()
-    mosquitto_process.terminate()
-    for i in range(5):
-        if hestia_process.poll() or mosquitto_process.poll():
-            sleep(1)
-
-    if hestia_process.poll():
-        cli.log.error('Hestia did not terminate, killing...')
-        hestia_process.kill()
-
-    if mosquitto_process.poll():
-        cli.log.error('Mosquitto did not terminate, killing...')
-        mosquitto_process.kill()
 
     # Report status
     return success
