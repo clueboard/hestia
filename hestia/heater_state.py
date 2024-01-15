@@ -105,11 +105,6 @@ class HeaterState:
     def last_received(self):
         return self._last_received
 
-    @last_received.setter
-    def last_received(self, value):
-        # FIXME: Validate
-        self._last_received = value
-
     @property
     def target(self):
         return self._target
