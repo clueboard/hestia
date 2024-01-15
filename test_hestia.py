@@ -44,6 +44,35 @@ def mqtt_listen(msg):
         mqtt_messages[msg.topic] = msg.payload
 
 
+def check_temps(temp_list, on_temps, off_temps):
+    """Iterate through a list of temperatures and make sure the heater turns on and off as needed.
+    """
+    success = True
+
+    for temp in temp_list:
+        cli.log.info('Sending temperature %s', temp)
+        app.publish(environ['TOPIC_TEMP_PROBE'], temp)
+        sleep(0.6)
+
+        if temp in on_temps:
+            if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ['PAYLOAD_HEATER_ON']:
+                cli.log.info('Sucessfully turned on heater!')
+                del mqtt_messages[environ['TOPIC_HEATER_SWITCH']]
+            else:
+                cli.log.error('Did not turn on heater! TOPIC_HEATER_SWITCH=%s', mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']))
+                success = False
+
+        elif temp in off_temps:
+            if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ['PAYLOAD_HEATER_OFF']:
+                cli.log.info('Sucessfully turned off heater!')
+                del mqtt_messages[environ['TOPIC_HEATER_SWITCH']]
+            else:
+                cli.log.error('Did not turn off heater! TOPIC_HEATER_SWITCH=%s', mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']))
+                success = False
+
+    return success
+
+
 @cli.entrypoint('Test hestia')
 def main(cli):
     success = True
@@ -64,42 +93,12 @@ def main(cli):
     sleep(HESTIA_SLEEP_TIME)
 
     # Send temperature readings from the turn on point to the turn off point to test that hestia is working correctly
-    for temp in [i/10 for i in range(188, 203)]:
-        cli.log.info('Sending temperature %s', temp)
-        app.publish(environ['TOPIC_TEMP_PROBE'], temp)
-        sleep(0.6)
-
-        if temp == 19.0:
-            if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ['PAYLOAD_HEATER_ON']:
-                cli.log.info('Sucessfully turned on heater!')
-            else:
-                success = False
-
-        elif temp == 20.2:
-            if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ['PAYLOAD_HEATER_OFF']:
-                cli.log.info('Sucessfully turned off heater!')
-            else:
-                success = False
+    if not check_temps([i/10 for i in range(188, 203)], [18.9, 19.0], [20.2]):
+        success = False
 
     # Send temperature readings from the turn off point to the turn on point to test that hestia is working correctly
-    for temp in [i/10 for i in range(202, 187, -1)]:
-        cli.log.info('Sending temperature %s', temp)
-        app.publish(environ['TOPIC_TEMP_PROBE'], temp)
-        sleep(0.6)
-
-        if temp == 18.8:
-            if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ['PAYLOAD_HEATER_ON']:
-                cli.log.info('Sucessfully turned on heater!')
-            else:
-                cli.log.error('Did not turn on heater! TOPIC_HEATER_SWITCH=%s', mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']))
-                success = False
-
-        elif temp == 20.0:
-            if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ['PAYLOAD_HEATER_OFF']:
-                cli.log.info('Sucessfully turned off heater!')
-            else:
-                cli.log.error('Did not turn on heater! TOPIC_HEATER_SWITCH=%s', mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']))
-                success = False
+    if not check_temps([i/10 for i in range(202, 187, -1)], [18.8], [20.0, 20.1, 20.2]):
+        success = False
 
     # Cleanup
     hestia_process.terminate()
