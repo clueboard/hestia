@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""Integration test for hestia.
+
+This script stands up a mosquitto mqtt broker and hestia, and sends signals over mqtt to test hestia's behavior.
+"""
 
 import atexit
 from os import environ
@@ -9,8 +13,8 @@ from gourd import Gourd
 from milc import cli
 
 # Tweak the behavior of this script
-MOSQUITTO_SLEEP_TIME=5
-HESTIA_SLEEP_TIME=5
+MOSQUITTO_SLEEP_TIME=3
+HESTIA_SLEEP_TIME=3
 
 # Set some variables to control hestia's behavior
 environ['DEDUPE_TIME'] = '0.5'
