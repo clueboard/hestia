@@ -83,6 +83,8 @@ class HeaterState:
                 self._latest_reading = mean(self._readings)
                 self._readings = []  # Reset the readings to prep for the next burst of data
 
+                self.gourd_app.publish(config.mqtt_current_temp_topic, self._latest_reading)
+
         except Exception as e:
             self.log.error('Uncaught exception: %s: %s', e.__class__.__name__, e)
             self.log.exception(e)

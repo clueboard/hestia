@@ -31,4 +31,5 @@ mqtt_heater_topic        = '/'.join((mqtt_base_topic, heater_name))
 mqtt_state_topic         = '/'.join((mqtt_heater_topic, 'state'))          # Values can be OFF or HEAT
 mqtt_target_temp_topic   = '/'.join((mqtt_heater_topic, 'target_C'))       # Target Temperature in Celsius
 mqtt_current_temp_topic  = '/'.join((mqtt_heater_topic, 'current_C'))      # Current Temperature in Celsius
+mqtt_current_humidity_topic  = '/'.join((mqtt_heater_topic, 'humidity'))   # Current Humidity
 mqtt_display_units_topic = '/'.join((mqtt_heater_topic, 'display_units'))  # Temperature Display Units (?)

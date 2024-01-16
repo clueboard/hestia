@@ -1,3 +1,4 @@
+from decimal import Decimal
 from os import environ
 from statistics import mean
 from time import time
@@ -27,7 +28,7 @@ print(f"""Homebridge mqttthing configuration for this device:
         "getTargetTemperature":          "{config.mqtt_target_temp_topic}",
         "setTemperatureDisplayUnits":    "{config.mqtt_display_units_topic}/set",
         "getTemperatureDisplayUnits":    "{config.mqtt_display_units_topic}",
-        "getCurrentRelativeHumidity":    "{config.topic_humidity_probe}",
+        "getCurrentRelativeHumidity":    "{config.mqtt_current_humidity_topic}",
     {"}"},
     "minTemperature": config.temp_min,
     "maxTemperature": config.temp_max,
@@ -54,14 +55,24 @@ def payload_to_float(payload):
     return temperature
 
 
+@app.subscribe(config.topic_humidity_probe)
+def report_humidity(msg):
+    app.debug('report_humidity: %s: %s', msg.topic, msg.payload)
+    app.publish(config.mqtt_current_humidity_topic, msg.payload)
+
+
 @app.subscribe(f'{config.mqtt_state_topic}/set')
 def set_state(msg):
+    app.debug('set_state: %s: %s', msg.topic, msg.payload)
     cli.log.info('set_state: %s, %s', msg.topic, msg.payload)
 
 
 @app.subscribe(f'{config.mqtt_target_temp_topic}/set')
 def set_target_temp(msg):
     cli.log.info('set_target_temp: %s, %s', msg.topic, msg.payload)
+    target_temp = Decimal(msg.payload)  # Validate the payload
+    heater_state = get_heater_state(app)
+    heater_state.target = float(target_temp)
 
 
 @app.subscribe(f'{config.mqtt_display_units_topic}/set')

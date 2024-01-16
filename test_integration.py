@@ -100,7 +100,6 @@ def check_temps(temp_list, on_temps, off_temps):
             break
 
         for switch_action, switch_temps in [['ON', on_temps], ['OFF', off_temps]]:
-            #print(f'hrm-1, {switch_action}, {repr(temp)}, {switch_temps}', temp in switch_temps)
             if temp in switch_temps:
                 if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ[f'PAYLOAD_HEATER_{switch_action}']:
                     cli.log.info('Sucessfully turned %s heater!', switch_action)
@@ -135,14 +134,10 @@ def sweep_temp_readings(cli, target_temp):
     down_off = [down_highest_temp, down_highest_temp-Decimal('0.1')]
 
     cli.log.info("sweep_temp_readings: Going up: %s", ', '.join(map(str, up_range_list)))
-    #print('hrm0', up_on)
-    #print('hrm1', up_off)
     if not check_temps([Decimal(i)/10 for i in range(*up_range)], up_on, up_off):
         success = False
 
     cli.log.info("sweep_temp_readings: Going down: %s", ', '.join(map(str, down_range_list)))
-    #print('hrm2', down_on)
-    #print('hrm3', down_off)
     if not check_temps([Decimal(i)/10 for i in range(*down_range)], down_on, down_off):
         success = False
 
