@@ -57,19 +57,19 @@ def payload_to_float(payload):
 
 @app.subscribe(config.topic_humidity_probe)
 def report_humidity(msg):
-    app.debug('report_humidity: %s: %s', msg.topic, msg.payload)
+    app.log.debug('report_humidity: %s: %s', msg.topic, msg.payload)
     app.publish(config.mqtt_current_humidity_topic, msg.payload)
 
 
 @app.subscribe(f'{config.mqtt_state_topic}/set')
 def set_state(msg):
-    app.debug('set_state: %s: %s', msg.topic, msg.payload)
-    cli.log.info('set_state: %s, %s', msg.topic, msg.payload)
+    app.log.debug('set_state: %s: %s', msg.topic, msg.payload)
+    app.log.info('set_state: %s, %s', msg.topic, msg.payload)
 
 
 @app.subscribe(f'{config.mqtt_target_temp_topic}/set')
 def set_target_temp(msg):
-    cli.log.info('set_target_temp: %s, %s', msg.topic, msg.payload)
+    app.log.info('set_target_temp: %s, %s', msg.topic, msg.payload)
     target_temp = Decimal(msg.payload)  # Validate the payload
     heater_state = get_heater_state(app)
     heater_state.target = float(target_temp)
@@ -77,7 +77,7 @@ def set_target_temp(msg):
 
 @app.subscribe(f'{config.mqtt_display_units_topic}/set')
 def set_display_units(msg):
-    cli.log.info('set_display_units: %s, %s', msg.topic, msg.payload)
+    app.log.info('set_display_units: %s, %s', msg.topic, msg.payload)
 
 
 @app.subscribe(config.topic_temp_probe)

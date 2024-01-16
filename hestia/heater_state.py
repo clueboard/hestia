@@ -19,7 +19,7 @@ def get_heater_state(gourd_app):
 class HeaterState:
     """Track state for the heater, and report it to MQTT.
     """
-    def __init__(self, gourd_app, logger=None, heater_switch=config.topic_heater_switch, active=True, last_received=0, lock=Lock(), readings=None, target=config.default_target_temp, state_topic=config.mqtt_state_topic, current_temp_topic=config.mqtt_current_temp_topic, target_temp_topic=config.mqtt_target_temp_topic, display_units_topic=config.mqtt_display_units_topic, humidity_topic=config.topic_humidity_probe):
+    def __init__(self, gourd_app, logger=None, heater_switch=config.topic_heater_switch, active=True, last_received=0, lock=Lock(), readings=None, target=config.default_target_temp, temp_variance=config.temp_variance, dedupe_time=config.dedupe_time, state_topic=config.mqtt_state_topic, current_temp_topic=config.mqtt_current_temp_topic, target_temp_topic=config.mqtt_target_temp_topic, display_units_topic=config.mqtt_display_units_topic, humidity_topic=config.topic_humidity_probe):
         self.gourd_app = gourd_app
         self.log = logger if logger else gourd_app.log
         self.heater_switch = heater_switch
@@ -29,14 +29,17 @@ class HeaterState:
         self._latest_reading = None
         self._readings = readings if readings else []
         self._target = target
+        self._lower_target = target - temp_variance
         self.state_topic = state_topic
         self.current_temp_topic = current_temp_topic
         self.target_temp_topic = target_temp_topic
+        self.temp_variance = temp_variance
+        self.dedupe_time = dedupe_time
         self.display_units_topic = display_units_topic
         self.humidity_topic = humidity_topic
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(active={self._active}, last_received={self._last_received}, lock=self.lock, readings=self._readings, target=self._target, state_topic=self._state_topic, current_temp_topic=self._current_temp_topic, target_temp_topic=_self.target_temp_topic, display_units_topic=_self.display_units_topic, humidity_topic=_self.humidity_topic)"
+        return f"{self.__class__.__name__}(active={self._active}, last_received={self._last_received}, lock=self.lock, readings=self._readings, target=self._target, temp_variance=self.temp_variance, dedupe_time=self.dedupe_time, state_topic=self._state_topic, current_temp_topic=self._current_temp_topic, target_temp_topic=_self.target_temp_topic, display_units_topic=_self.display_units_topic, humidity_topic=_self.humidity_topic)"
 
     def add_reading(self, temperature):
         """Add a reading to the current list.
@@ -50,7 +53,7 @@ class HeaterState:
         """
         last_received_delta = time() - self.last_received
 
-        if (last_received_delta > config.dedupe_time) and self._readings:
+        if (last_received_delta > self.dedupe_time) and self._readings:
             return True
 
         return False
@@ -64,12 +67,12 @@ class HeaterState:
             * `None` means do nothing
         """
         if self._active and self.temperature:
-            if self._latest_reading < self.target - config.temp_variance:
-                self.log.debug('HEATER_ON: Temp: %s, ON < %s, OFF > %s', self.temperature, self.target-config.temp_variance, self.target)
+            if self._latest_reading < self._lower_target:
+                self.log.debug('HEATER_ON: Temp: %s, ON < %s, OFF > %s', self.temperature, self._lower_target, self._target)
                 return config.payload_heater_on
 
-            elif self._latest_reading > self.target:
-                self.log.debug('HEATER_OFF: Temp: %s, ON < %s, OFF > %s', self.temperature, self.target-config.temp_variance, self.target)
+            elif self._latest_reading > self._target:
+                self.log.debug('HEATER_OFF: Temp: %s, ON < %s, OFF > %s', self.temperature, self._lower_target, self._target)
                 return config.payload_heater_off
 
     @property
@@ -113,5 +116,7 @@ class HeaterState:
 
     @target.setter
     def target(self, value):
-        self.gourd_app.publish(self._target_temp_topic, value)
+        self.gourd_app.publish(self.target_temp_topic, value)
         self._target = value
+        self._lower_target = value - self.temp_variance
+        self.log.info('New target setpoints: %s-%s', self._lower_target, self._target)

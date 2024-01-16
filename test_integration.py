@@ -13,6 +13,8 @@ from time import sleep
 from gourd import Gourd
 from milc import cli
 
+from hestia import config
+
 # Tweak the behavior of this script
 MOSQUITTO_SLEEP_TIME=3
 HESTIA_SLEEP_TIME=3
@@ -37,6 +39,7 @@ environ['TEMP_MAX'] = '25'
 environ['TOPIC_TEMP_PROBE'] = 'probe/temp'
 environ['TOPIC_HUMIDITY_PROBE'] = 'probe/humidity'
 environ['TOPIC_HEATER_SWITCH'] = 'switch/heater'
+environ['TOPIC_TARGET_SET'] = f"{environ['MQTT_BASE_TOPIC']}/{environ['HEATER_NAME']}/target_C/set"
 
 # Objects
 app = Gourd(app_name='test_hestia_script', mqtt_host=environ['MQTT_HOST'], mqtt_port=int(environ['MQTT_PORT']), username=environ['MQTT_USER'], password=environ['MQTT_PASSWD'], timeout=int(environ['MQTT_TIMEOUT']))
@@ -47,7 +50,7 @@ processes = {}
 @app.subscribe('#')
 def mqtt_listen(msg):
     if not msg.topic.endswith('/debug'):
-        cli.log.info('MQTT Message: %s: %s', msg.topic, msg.payload)
+        cli.log.info('{fg_green}MQTT Message: {fg_cyan}%s: {fg_blue}%s', msg.topic, msg.payload)
         mqtt_messages[msg.topic] = msg.payload
 
 
@@ -56,7 +59,7 @@ def atexit_cleanup():
     """Cleanup background processes before exiting.
     """
     # Tell all processes to exit, in a nice way
-    cli.log.info('Cleaning up background processes...')
+    cli.log.info('{fg_green}Cleaning up background processes...')
     for process in processes.values():
         process.terminate()
 
@@ -69,7 +72,7 @@ def atexit_cleanup():
     # Tell any remaining processes to exit, non-politely
     for process_name, process in processes.items():
         if process.poll() is None:
-            cli.log.error('%s did not terminate, killing...', processs_name.title())
+            cli.log.error('{fg_red}%s did not terminate, killing...', processs_name.title())
             process.kill()
 
 
@@ -79,7 +82,7 @@ def check_procs():
     for process_name, process in processes.items():
         process_status = process.poll()
         if process_status is not None:
-            cli.log.error('%s is no longer running! errno %s', process_name.title(), process_status)
+            cli.log.error('{fg_red}%s is no longer running! errno %s', process_name.title(), process_status)
             return False
 
     return True
@@ -91,7 +94,7 @@ def check_temps(temp_list, on_temps, off_temps):
     success = True
 
     for temp in temp_list:
-        cli.log.info('Sending temperature %s', temp)
+        cli.log.info('{fg_green}Sending temperature {fg_blue}%s', temp)
         app.publish(environ['TOPIC_TEMP_PROBE'], str(temp))
         sleep(0.6)
 
@@ -102,9 +105,9 @@ def check_temps(temp_list, on_temps, off_temps):
         for switch_action, switch_temps in [['ON', on_temps], ['OFF', off_temps]]:
             if temp in switch_temps:
                 if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ[f'PAYLOAD_HEATER_{switch_action}']:
-                    cli.log.info('Sucessfully turned %s heater!', switch_action)
+                    cli.log.info('{fg_blue}Sucessfully turned {fg_red}%s {fg_blue}heater!', switch_action)
                 else:
-                    cli.log.error('Did not turn %s heater! TOPIC_HEATER_SWITCH=%s', switch_action, mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']))
+                    cli.log.error('{fg_red}Did not turn {fg_blue}%s {fg_red}heater! TOPIC_HEATER_SWITCH=%s', switch_action, mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']))
                     success = False
 
         if environ['TOPIC_HEATER_SWITCH'] in mqtt_messages:
@@ -125,7 +128,7 @@ def sweep_temp_readings(cli, target_temp):
     up_range = (int(up_lowest_temp*10), int(up_highest_temp*10))
     up_range_list = [i/10 for i in range(*up_range)]
     up_on = [up_lowest_temp+Decimal('0.1'), lower_target_temp]
-    up_off = [up_highest_temp]
+    up_off = [up_highest_temp-Decimal('0.1')]
     down_lowest_temp = lower_target_temp - Decimal('0.3')
     down_highest_temp = target_temp + Decimal('0.1')
     down_range = (int(down_highest_temp*10), int(down_lowest_temp*10), -1)
@@ -133,11 +136,11 @@ def sweep_temp_readings(cli, target_temp):
     down_on = [down_lowest_temp+Decimal('0.1')]
     down_off = [down_highest_temp, down_highest_temp-Decimal('0.1')]
 
-    cli.log.info("sweep_temp_readings: Going up: %s", ', '.join(map(str, up_range_list)))
+    cli.log.info("{fg_green}sweep_temp_readings: {fg_reset}Going up: {fg_blue}%s", ', '.join(map(str, up_range_list)))
     if not check_temps([Decimal(i)/10 for i in range(*up_range)], up_on, up_off):
         success = False
 
-    cli.log.info("sweep_temp_readings: Going down: %s", ', '.join(map(str, down_range_list)))
+    cli.log.info("{fg_green}sweep_temp_readings: {fg_reset}Going down: {fg_blue}%s", ', '.join(map(str, down_range_list)))
     if not check_temps([Decimal(i)/10 for i in range(*down_range)], down_on, down_off):
         success = False
 
@@ -149,24 +152,31 @@ def main(cli):
     success = True
 
     ## Start the daemons we'll need
-    cli.log.info('Starting mosquitto in the background and waiting %s seconds for initialization', MOSQUITTO_SLEEP_TIME)
-    args = 'mosquitto', '-c', './test_mosquitto.conf'
+    cli.log.info('{fg_magenta}Starting mosquitto in the background and waiting {fg_green}%s {fg_magenta}seconds for initialization', MOSQUITTO_SLEEP_TIME)
+    args = ['mosquitto', '-c', './test_mosquitto.conf']
     processes['mosquitto'] = Popen(args)
     sleep(MOSQUITTO_SLEEP_TIME)
 
-    cli.log.info('Starting MQTT listener and waiting %s seconds for initialization', MOSQUITTO_SLEEP_TIME)
+    cli.log.info('{fg_magenta}Starting MQTT listener and waiting {fg_green}%s {fg_magenta}seconds for initialization', MOSQUITTO_SLEEP_TIME)
     app.loop_start()
     sleep(MOSQUITTO_SLEEP_TIME)
 
-    cli.log.info('Starting hestia in the background and waiting %s seconds for initialization', HESTIA_SLEEP_TIME)
-    args = './run_hestia'
+    cli.log.info('{fg_magenta}Starting hestia in the background and waiting {fg_green}%s {fg_magenta}seconds for initialization', HESTIA_SLEEP_TIME)
+    args = ['gourd', 'hestia:app']
     processes['hestia'] = Popen(args)
     sleep(HESTIA_SLEEP_TIME)
 
     ## Run tests here
-    # Basic temperature sweep at default desired temp
+    cli.log.info('{fg_magenta}Basic temperature sweep at default desired temp')
     if not sweep_temp_readings(cli, environ['TEMP_DESIRED']):
-        cli.log.error('Basic functionality test failed!')
+        cli.log.error('{fg_red}Basic functionality test failed!')
+        success = False
+
+    cli.log.info('{fg_magenta}Set the target temp to {fg_red}19 {fg_magenta}and rerun the sweep')
+    app.publish(environ['TOPIC_TARGET_SET'], '19')
+    sleep(1)
+    if not sweep_temp_readings(cli, '19'):
+        cli.log.error('{fg_red}New target temperature test failed!')
         success = False
 
     # Report status
