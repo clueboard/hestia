@@ -5,6 +5,7 @@ This script stands up a mosquitto mqtt broker and hestia, and sends signals over
 """
 
 import atexit
+from decimal import Decimal
 from os import environ
 from subprocess import Popen
 from time import sleep
@@ -91,7 +92,7 @@ def check_temps(temp_list, on_temps, off_temps):
 
     for temp in temp_list:
         cli.log.info('Sending temperature %s', temp)
-        app.publish(environ['TOPIC_TEMP_PROBE'], temp)
+        app.publish(environ['TOPIC_TEMP_PROBE'], str(temp))
         sleep(0.6)
 
         if not check_procs():
@@ -99,6 +100,7 @@ def check_temps(temp_list, on_temps, off_temps):
             break
 
         for switch_action, switch_temps in [['ON', on_temps], ['OFF', off_temps]]:
+            #print(f'hrm-1, {switch_action}, {repr(temp)}, {switch_temps}', temp in switch_temps)
             if temp in switch_temps:
                 if mqtt_messages.get(environ['TOPIC_HEATER_SWITCH']) == environ[f'PAYLOAD_HEATER_{switch_action}']:
                     cli.log.info('Sucessfully turned %s heater!', switch_action)
@@ -112,11 +114,46 @@ def check_temps(temp_list, on_temps, off_temps):
     return success
 
 
+def sweep_temp_readings(cli, target_temp):
+    """Walk the temperature up, down, and up again.
+    """
+    target_temp = Decimal(target_temp)
+    temp_variance = Decimal(environ['TEMP_VARIANCE'])
+    lower_target_temp = target_temp - temp_variance
+    success = True
+    up_lowest_temp = lower_target_temp - Decimal('0.2')
+    up_highest_temp = target_temp + Decimal('0.3')
+    up_range = (int(up_lowest_temp*10), int(up_highest_temp*10))
+    up_range_list = [i/10 for i in range(*up_range)]
+    up_on = [up_lowest_temp+Decimal('0.1'), lower_target_temp]
+    up_off = [up_highest_temp]
+    down_lowest_temp = lower_target_temp - Decimal('0.3')
+    down_highest_temp = target_temp + Decimal('0.1')
+    down_range = (int(down_highest_temp*10), int(down_lowest_temp*10), -1)
+    down_range_list = [i/10 for i in range(*down_range)]
+    down_on = [down_lowest_temp+Decimal('0.1')]
+    down_off = [down_highest_temp, down_highest_temp-Decimal('0.1')]
+
+    cli.log.info("sweep_temp_readings: Going up: %s", ', '.join(map(str, up_range_list)))
+    #print('hrm0', up_on)
+    #print('hrm1', up_off)
+    if not check_temps([Decimal(i)/10 for i in range(*up_range)], up_on, up_off):
+        success = False
+
+    cli.log.info("sweep_temp_readings: Going down: %s", ', '.join(map(str, down_range_list)))
+    #print('hrm2', down_on)
+    #print('hrm3', down_off)
+    if not check_temps([Decimal(i)/10 for i in range(*down_range)], down_on, down_off):
+        success = False
+
+    return success
+
+
 @cli.entrypoint('Test hestia')
 def main(cli):
     success = True
 
-    # Start the daemons we'll need
+    ## Start the daemons we'll need
     cli.log.info('Starting mosquitto in the background and waiting %s seconds for initialization', MOSQUITTO_SLEEP_TIME)
     args = 'mosquitto', '-c', './test_mosquitto.conf'
     processes['mosquitto'] = Popen(args)
@@ -131,12 +168,10 @@ def main(cli):
     processes['hestia'] = Popen(args)
     sleep(HESTIA_SLEEP_TIME)
 
-    # Send temperature readings from the turn on point to the turn off point to test that hestia is working correctly
-    if not check_temps([i/10 for i in range(188, 203)], [18.9, 19.0], [20.2]):
-        success = False
-
-    # Send temperature readings from the turn off point to the turn on point to test that hestia is working correctly
-    if not check_temps([i/10 for i in range(202, 187, -1)], [18.8], [20.0, 20.1, 20.2]):
+    ## Run tests here
+    # Basic temperature sweep at default desired temp
+    if not sweep_temp_readings(cli, environ['TEMP_DESIRED']):
+        cli.log.error('Basic functionality test failed!')
         success = False
 
     # Report status
