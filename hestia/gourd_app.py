@@ -109,6 +109,7 @@ def process_reading(msg):
 
             if heater_action:
                 app.publish(config.topic_heater_switch, heater_action)
+                app.publish(mqtt_heating_topic, str(heater_action == config.payload_heater_on).lower())
 
         # Record reading
         temperature = payload_to_float(msg.payload)

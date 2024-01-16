@@ -30,6 +30,7 @@ topic_heater_switch  = environ.get('TOPIC_HEATER_SWITCH', 'zwave/Office/OfficeTu
 mqtt_base_topic          = environ.get('MQTT_BASE_TOPIC', 'hestia')
 mqtt_heater_topic        = '/'.join((mqtt_base_topic, heater_name))
 mqtt_state_topic         = '/'.join((mqtt_heater_topic, 'state'))          # Values can be OFF or HEAT
+mqtt_heating_topic       = '/'.join((mqtt_heater_topic, 'heating'))        # Whether or not we are currently heating (true/false)
 mqtt_target_temp_topic   = '/'.join((mqtt_heater_topic, 'target_C'))       # Target Temperature in Celsius
 mqtt_current_temp_topic  = '/'.join((mqtt_heater_topic, 'current_C'))      # Current Temperature in Celsius
 mqtt_current_humidity_topic  = '/'.join((mqtt_heater_topic, 'humidity'))   # Current Humidity
