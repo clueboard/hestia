@@ -12,6 +12,7 @@ mqtt_timeout   = int(environ.get('MQTT_TIMEOUT', '30'))
 
 # Basic Behavioral Configuration
 dedupe_time         = float(environ.get('DEDUPE_TIME', '5'))      # In seconds, how long to wait for all messages to come in
+display_units       = 'CELSIUS'                                   # ???
 default_target_temp = float(environ.get('TEMP_DESIRED', '20'))    # In celsius, the default setpoint, or at which temp the heater will turn off
 temp_variance       = float(environ.get('TEMP_VARIANCE', '1'))    # AKA Swing, this is how many far below the setpoint the heater turns on
 temp_min            = float(environ.get('TEMP_MIN', '2'))         # The lowest temperature this thermostat will control

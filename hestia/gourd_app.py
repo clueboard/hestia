@@ -9,7 +9,7 @@ from gourd import Gourd
 from hestia import config
 from hestia.heater_state import get_heater_state
 
-app = Gourd(app_name='hestia', mqtt_host=config.mqtt_host, mqtt_port=config.mqtt_port, username=config.mqtt_user, password=config.mqtt_pass, timeout=config.mqtt_timeout)
+app = Gourd(app_name='hestia', mqtt_host=config.mqtt_host, mqtt_port=config.mqtt_port, username=config.mqtt_user, password=config.mqtt_pass, timeout=config.mqtt_timeout, log_mqtt=False)
 
 ### mqttthing configuration
 print(f"""Homebridge mqttthing configuration for this device:
@@ -28,10 +28,10 @@ print(f"""Homebridge mqttthing configuration for this device:
         "getTargetTemperature":          "{config.mqtt_target_temp_topic}",
         "setTemperatureDisplayUnits":    "{config.mqtt_display_units_topic}/set",
         "getTemperatureDisplayUnits":    "{config.mqtt_display_units_topic}",
-        "getCurrentRelativeHumidity":    "{config.mqtt_current_humidity_topic}",
+        "getCurrentRelativeHumidity":    "{config.mqtt_current_humidity_topic}"
     {"}"},
-    "minTemperature": config.temp_min,
-    "maxTemperature": config.temp_max,
+    "minTemperature": {config.temp_min},
+    "maxTemperature": {config.temp_max},
     "restrictHeatingCoolingState": [0, 1]
 {"}"}
 """)
@@ -63,13 +63,14 @@ def report_humidity(msg):
 
 @app.subscribe(f'{config.mqtt_state_topic}/set')
 def set_state(msg):
-    app.log.debug('set_state: %s: %s', msg.topic, msg.payload)
-    app.log.info('set_state: %s, %s', msg.topic, msg.payload)
+    app.log.info('set_state: %s: %s', msg.topic, msg.payload)
+    heater_state = get_heater_state(app)
+    heater_state.state = msg.payload
 
 
 @app.subscribe(f'{config.mqtt_target_temp_topic}/set')
 def set_target_temp(msg):
-    app.log.info('set_target_temp: %s, %s', msg.topic, msg.payload)
+    app.log.debug('set_target_temp: %s, %s', msg.topic, msg.payload)
     target_temp = Decimal(msg.payload)  # Validate the payload
     heater_state = get_heater_state(app)
     heater_state.target = float(target_temp)
@@ -78,6 +79,8 @@ def set_target_temp(msg):
 @app.subscribe(f'{config.mqtt_display_units_topic}/set')
 def set_display_units(msg):
     app.log.info('set_display_units: %s, %s', msg.topic, msg.payload)
+    heater_state = get_heater_state(app)
+    heater_state.display_units = msg.payload
 
 
 @app.subscribe(config.topic_temp_probe)

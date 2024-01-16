@@ -19,11 +19,11 @@ def get_heater_state(gourd_app):
 class HeaterState:
     """Track state for the heater, and report it to MQTT.
     """
-    def __init__(self, gourd_app, logger=None, heater_switch=config.topic_heater_switch, active=True, last_received=0, lock=Lock(), readings=None, target=config.default_target_temp, temp_variance=config.temp_variance, dedupe_time=config.dedupe_time, state_topic=config.mqtt_state_topic, current_temp_topic=config.mqtt_current_temp_topic, target_temp_topic=config.mqtt_target_temp_topic, display_units_topic=config.mqtt_display_units_topic, humidity_topic=config.topic_humidity_probe):
+    def __init__(self, gourd_app, logger=None, heater_switch=config.topic_heater_switch, state='HEAT', last_received=0, lock=Lock(), readings=None, target=config.default_target_temp, temp_variance=config.temp_variance, dedupe_time=config.dedupe_time, display_units=config.display_units, state_topic=config.mqtt_state_topic, current_temp_topic=config.mqtt_current_temp_topic, target_temp_topic=config.mqtt_target_temp_topic, display_units_topic=config.mqtt_display_units_topic, humidity_topic=config.topic_humidity_probe):
         self.gourd_app = gourd_app
         self.log = logger if logger else gourd_app.log
         self.heater_switch = heater_switch
-        self._active = active
+        self._state = state
         self._last_received = last_received
         self.lock = lock
         self._latest_reading = None
@@ -35,11 +35,12 @@ class HeaterState:
         self.target_temp_topic = target_temp_topic
         self.temp_variance = temp_variance
         self.dedupe_time = dedupe_time
+        self._display_units = display_units
         self.display_units_topic = display_units_topic
         self.humidity_topic = humidity_topic
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(active={self._active}, last_received={self._last_received}, lock=self.lock, readings=self._readings, target=self._target, temp_variance=self.temp_variance, dedupe_time=self.dedupe_time, state_topic=self._state_topic, current_temp_topic=self._current_temp_topic, target_temp_topic=_self.target_temp_topic, display_units_topic=_self.display_units_topic, humidity_topic=_self.humidity_topic)"
+        return f"{self.__class__.__name__}(state={self._state}, last_received={self._last_received}, lock=self.lock, readings=self._readings, target=self._target, temp_variance=self.temp_variance, dedupe_time=self.dedupe_time, state_topic=self._state_topic, current_temp_topic=self._current_temp_topic, target_temp_topic=_self.target_temp_topic, display_units_topic=_self.display_units_topic, humidity_topic=_self.humidity_topic)"
 
     def add_reading(self, temperature):
         """Add a reading to the current list.
@@ -66,14 +67,23 @@ class HeaterState:
             * `HEATER_OFF` means the heater should be turned off
             * `None` means do nothing
         """
-        if self._active and self.temperature:
+        self.log.debug('Running heater_state.action().')
+        if self._state == 'HEAT' and self.temperature:
             if self._latest_reading < self._lower_target:
-                self.log.debug('HEATER_ON: Temp: %s, ON < %s, OFF > %s', self.temperature, self._lower_target, self._target)
+                self.log.debug('HEATER_ON: Temp: %s, ON < %s, OFF > %s', self._latest_reading, self._lower_target, self._target)
                 return config.payload_heater_on
 
             elif self._latest_reading > self._target:
-                self.log.debug('HEATER_OFF: Temp: %s, ON < %s, OFF > %s', self.temperature, self._lower_target, self._target)
+                self.log.debug('HEATER_OFF: Temp: %s, ON < %s, OFF > %s', self._latest_reading, self._lower_target, self._target)
                 return config.payload_heater_off
+
+    def publish_readings(self):
+        """Publish all the read values to MQTT.
+        """
+        self.gourd_app.publish(self.current_temp_topic, self._latest_reading)
+        self.gourd_app.publish(self.state_topic, self._state)
+        self.gourd_app.publish(self.target_temp_topic, self._target)
+        self.gourd_app.publish(self.display_units_topic, self._display_units)
 
     @property
     def temperature(self):
@@ -86,7 +96,7 @@ class HeaterState:
                 self._latest_reading = mean(self._readings)
                 self._readings = []  # Reset the readings to prep for the next burst of data
 
-                self.gourd_app.publish(config.mqtt_current_temp_topic, self._latest_reading)
+                self.publish_readings()
 
         except Exception as e:
             self.log.error('Uncaught exception: %s: %s', e.__class__.__name__, e)
@@ -98,13 +108,24 @@ class HeaterState:
         return self._latest_reading
 
     @property
-    def active(self):
-        return self._active
+    def display_units(self):
+        return self._display_units
 
-    @active.setter
-    def active(self, enabled):
-        self.gourd_app.publish(self.state_topic, enabled)
-        self._active = enabled
+    @display_units.setter
+    def display_units(self, new_display_units):
+        if new_display_units in ['CELSIUS', 'FAHRENHEIT']:
+            self._display_units = new_display_units
+            self.gourd_app.publish(self.display_units_topic, new_display_units)
+
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, new_state):
+        if new_state in ['HEAT', 'OFF']:
+            self._state = new_state
+            self.gourd_app.publish(self.state_topic, new_state)
 
     @property
     def last_received(self):
@@ -119,4 +140,3 @@ class HeaterState:
         self.gourd_app.publish(self.target_temp_topic, value)
         self._target = value
         self._lower_target = value - self.temp_variance
-        self.log.info('New target setpoints: %s-%s', self._lower_target, self._target)

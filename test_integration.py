@@ -42,7 +42,7 @@ environ['TOPIC_HEATER_SWITCH'] = 'switch/heater'
 environ['TOPIC_TARGET_SET'] = f"{environ['MQTT_BASE_TOPIC']}/{environ['HEATER_NAME']}/target_C/set"
 
 # Objects
-app = Gourd(app_name='test_hestia_script', mqtt_host=environ['MQTT_HOST'], mqtt_port=int(environ['MQTT_PORT']), username=environ['MQTT_USER'], password=environ['MQTT_PASSWD'], timeout=int(environ['MQTT_TIMEOUT']))
+app = Gourd(app_name='test_hestia_script', mqtt_host=environ['MQTT_HOST'], mqtt_port=int(environ['MQTT_PORT']), username=environ['MQTT_USER'], password=environ['MQTT_PASSWD'], timeout=int(environ['MQTT_TIMEOUT']), log_mqtt=False)
 mqtt_messages = {}  # {topic: payload}
 processes = {}
 
